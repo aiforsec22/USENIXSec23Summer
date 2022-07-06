@@ -7,7 +7,7 @@ class Data:
     def __init__(self, data_dir, reverse=False, tail_entity=None):
         self.train_data = self.load_data(data_dir, "train", reverse)
         print('size of train data', len(self.train_data))
-        self.valid_data = self.load_data(data_dir, "valid", reverse, tail_entity)
+        self.valid_data = self.load_data(data_dir, "test", reverse, tail_entity)
         print('size of valid data', len(self.valid_data))
         self.test_data = self.load_data(data_dir, "test", reverse, tail_entity)
         self.data = self.train_data + self.valid_data + self.test_data
@@ -28,11 +28,10 @@ class Data:
         with open('relations_str.txt', 'w') as filehandle:
             for listitem in self.relations:
                 filehandle.write('%s\n' % listitem)
-        #print(self.train_relations)
 
     def load_data(self, data_dir, data_type, reverse=False, tail_entity=None):
-        with open('labeled_row_to_malware_mapping.pickle', 'rb') as handle:
-            labeled_row_to_malware_mapping = pickle.load(handle)
+#         with open('labeled_row_to_malware_mapping.pickle', 'rb') as handle:
+#             labeled_row_to_malware_mapping = pickle.load(handle)
         
         fp = os.path.join(data_dir, data_type+ ".txt")
         with open(fp, "r") as f:

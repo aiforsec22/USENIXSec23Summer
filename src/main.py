@@ -15,7 +15,7 @@ class Experiment:
     def __init__(self, learning_rate, ent_vec_dim, rel_vec_dim, 
                  num_iterations, batch_size, decay_rate=0., cuda=False, 
                  input_dropout=0.3, hidden_dropout1=0.4, hidden_dropout2=0.5,
-                 label_smoothing=0., outfile='result.txt'):
+                 label_smoothing=0., outfile='result.txt', print_test=False):
         self.learning_rate = learning_rate
         self.ent_vec_dim = ent_vec_dim
         self.rel_vec_dim = rel_vec_dim
@@ -24,6 +24,7 @@ class Experiment:
         self.decay_rate = decay_rate
         self.label_smoothing = label_smoothing
         self.outfile = outfile
+        self.print_test = print_test
         self.cuda = cuda
         self.kwargs = {"input_dropout": input_dropout, "hidden_dropout1": hidden_dropout1,
                        "hidden_dropout2": hidden_dropout2}
@@ -60,7 +61,7 @@ class Experiment:
     def evaluate(self, model, data, current_iteration, test_flag):
         hits = []
         ranks = []
-        for i in range(10):
+        for i in range(30):
             hits.append([])
 
         test_data_idxs = self.get_data_idxs(data)
@@ -125,9 +126,13 @@ class Experiment:
 
                 ranks.append(rank+1)
 
-                for hits_level in range(10):
 
+                if test_flag:
+                    for ii in range(30):
+                        pred_idx = sort_idxs[j][ii]
+                        print(self.rev_entity_idx[pred_idx], predictions[j][pred_idx].item())
 
+                for hits_level in range(30):
                     if rank <= hits_level:
                         if flag == False:
 #                            print('sort_idxs', sort_idxs)
@@ -140,6 +145,8 @@ class Experiment:
                     else:
                         hits[hits_level].append(0.0)
         
+        print('Hits @30: {0}'.format(np.mean(hits[29])))
+        print('Hits @20: {0}'.format(np.mean(hits[19])))
         print('Hits @10: {0}'.format(np.mean(hits[9])))
         print('Hits @3: {0}'.format(np.mean(hits[2])))
         print('Hits @1: {0}'.format(np.mean(hits[0])))
@@ -155,6 +162,9 @@ class Experiment:
         with open(self.outfile, 'a') as fout:
             fout.writelines("Training the TuckER model...\n")
         self.entity_idxs = {d.entities[i]:i for i in range(len(d.entities))}
+        self.rev_entity_idx = {}
+        for k, v in self.entity_idxs.items():
+            self.rev_entity_idx[v] = k
         self.relation_idxs = {d.relations[i]:i for i in range(len(d.relations))}
 
         train_data_idxs = self.get_data_idxs(d.train_data)
@@ -193,7 +203,6 @@ class Experiment:
                 r_idx = torch.tensor(data_batch[:,1])  
                 if self.cuda:
                     e1_idx = e1_idx.cuda()
-                    print("-----------------line 196, main.py", type(e1_idx))
                     r_idx = r_idx.cuda()
                 predictions = model.forward(e1_idx, r_idx)
                 if self.label_smoothing:
@@ -218,7 +227,7 @@ class Experiment:
                     with open(self.outfile, 'a') as fout:
                         fout.writelines("Test:\n")
                     start_test = time.time()
-                    self.evaluate(model, d.test_data, it, True)
+                    self.evaluate(model, d.test_data, it, self.print_test)
                     #print(time.time()-start_test)
            
 
@@ -250,11 +259,13 @@ if __name__ == '__main__':
                     help="Dropout after the second hidden layer.")
     parser.add_argument("--label_smoothing", type=float, default=0.1, nargs="?",
                     help="Amount of label smoothing.")
+    parser.add_argument('--print_test', default=False, type=lambda x: (str(x).lower() == 'true'))
+
 
     args = parser.parse_args()
     dataset = args.dataset
-    #data_dir = "data/%s/" % dataset
-    data_dir = "/content/gdrive/My Drive/Colab Notebooks/TuckER-master/data/%s/"%dataset
+    data_dir = "data/%s/" % dataset
+    # data_dir = "/content/gdrive/MyDrive/research/TuckER/data/%s/"%dataset
     print(data_dir)
     torch.backends.cudnn.deterministic = True 
     seed = 20
@@ -262,28 +273,20 @@ if __name__ == '__main__':
     torch.manual_seed(seed)
     if torch.cuda.is_available:
         torch.cuda.manual_seed_all(seed) 
-    d = Data(data_dir=data_dir, reverse=True)
+    d = Data(data_dir=data_dir, reverse=False)
     
-    batch_size_list = [128, 256]
-    num_iter_list = [400, 500]
-    learning_rate_list = [0.001, 0.0005]
-    ent_embd_list = [200, 50]
-    rel_embd_list = [200, 50]
-    for batch_id in batch_size_list:
-        for iter_id in num_iter_list:
-            for ent_id in ent_embd_list:
-                for rel_id in rel_embd_list:
-                    for lr_id in learning_rate_list:
-                        outfile_id = data_dir + 'trial_results/batch'+str(batch_id)+'iter'+str(iter_id)+'lr'+str(lr_id)+'ent'+str(ent_id)+'rel'+str(rel_id)+'.txt'
-                        print(outfile_id)
-                        experiment = Experiment(num_iterations=iter_id, batch_size=batch_id, learning_rate=lr_id, 
-                                        decay_rate=args.dr, ent_vec_dim=ent_id, rel_vec_dim=rel_id, cuda=args.cuda,
+    
+    outfile_id = data_dir + 'trial_results/batch'+str(args.batch_size)+'iter'+str(args.num_iterations)+'lr'+str(args.lr)+'ent'+str(args.edim)+'rel'+str(args.rdim)+'.txt'
+    print(outfile_id)
+    experiment = Experiment(num_iterations=args.num_iterations, batch_size=args.batch_size, learning_rate=args.lr, 
+                                        decay_rate=args.dr, ent_vec_dim=args.edim, rel_vec_dim=args.rdim, cuda=args.cuda,
                                         input_dropout=args.input_dropout, hidden_dropout1=args.hidden_dropout1, 
-                                        hidden_dropout2=args.hidden_dropout2, label_smoothing=args.label_smoothing, outfile=outfile_id)
-                        experiment.train_and_eval()
-                        print("Finished printing to", outfile_id)
-                        with open(outfile_id, 'a') as fout:
-                            fout.writelines("========================")
+                                        hidden_dropout2=args.hidden_dropout2, label_smoothing=args.label_smoothing, outfile=outfile_id, 
+                                        print_test=args.print_test)
+    experiment.train_and_eval()
+    print("Finished printing to", outfile_id)
+    with open(outfile_id, 'a') as fout:
+        fout.writelines("========================")
 
 
     '''experiment = Experiment(num_iterations=args.num_iterations, batch_size=args.batch_size, learning_rate=args.lr, 
@@ -292,6 +295,4 @@ if __name__ == '__main__':
                             hidden_dropout2=args.hidden_dropout2, label_smoothing=args.label_smoothing)
 '''
             
-
-                
-
+    
